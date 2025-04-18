@@ -7,7 +7,7 @@ const DT: f32 = 0.001;       // Time step for integration
 // Structure for a body
 struct Body {
     position: vec4<f32>, // xyz = position, w = mass
-    velocity: vec4<f32>, // xyz = velocity, w = unused
+    velocity: vec4<f32>, // xyz = velocity, w = visual radius
     color: vec4<f32>,    // rgba color
 }
 
@@ -41,7 +41,8 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Current position and velocity
     let pos = body.position.xyz;
     let vel = body.velocity.xyz;
-    let mass = body.position.w;
+    let mass = body.position.w; // Mass from position.w
+    let visual_radius = body.velocity.w; // Visual radius from velocity.w
     
     // Calculate acceleration at current position
     var acceleration = vec3<f32>(0.0, 0.0, 0.0);
@@ -52,7 +53,7 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
         
         let other = bodies_in[i];
         let other_pos = other.position.xyz;
-        let other_mass = other.position.w;
+        let other_mass = other.position.w; // Other mass from position.w
         
         // Calculate direction and distance
         let dir = other_pos - pos;
@@ -74,7 +75,7 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // First half of Verlet: update position based on current velocity and acceleration
     let new_pos = pos + vel * sim.deltaTime + 0.5 * acceleration * sim.deltaTime * sim.deltaTime;
     
-    // Store new position
+    // Store new position (keep mass unchanged)
     new_body.position = vec4<f32>(new_pos, mass);
     
     // Second half of Verlet: update velocity
@@ -82,8 +83,8 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // For more accuracy, you could add a second pass in another shader
     let new_vel = vel + acceleration * sim.deltaTime;
     
-    // Store new velocity
-    new_body.velocity = vec4<f32>(new_vel, 0.0);
+    // Store new velocity (keep visual radius unchanged)
+    new_body.velocity = vec4<f32>(new_vel, visual_radius);
     
     // Store the updated body
     bodies_out[index] = new_body;
@@ -104,8 +105,9 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32) -> VertexOutput {
     let world_pos = vec4<f32>(body.position.xyz, 1.0);
     let clip_pos = sim.projectionMatrix * sim.viewMatrix * world_pos;
     
-    // Calculate point size (could be based on mass)
-    let point_size = 2.0 + 3.0 * sqrt(body.position.w / 100.0);
+    // Use the visual radius from velocity.w for point size
+    // Apply a scaling factor if needed to make it visible on screen
+    let point_size = max(body.velocity.w, 0.5);
     
     var output: VertexOutput;
     output.position = clip_pos;

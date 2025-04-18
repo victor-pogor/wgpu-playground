@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
 
 // Constants for simulation
 pub const NUM_BODIES: u32 = 1024;
@@ -10,7 +9,7 @@ pub const COMPUTE_WORKGROUP_SIZE: u32 = 64;
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct Body {
     pub position: [f32; 4], // xyz = position, w = mass
-    pub velocity: [f32; 4], // xyz = velocity, w = unused
+    pub velocity: [f32; 4], // xyz = velocity, w = visual radius
     pub color: [f32; 4],    // rgba color
 }
 

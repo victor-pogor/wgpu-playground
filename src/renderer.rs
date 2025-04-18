@@ -2,12 +2,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytemuck;
-use glam::{Mat4, Vec3};
+use glam::Mat4;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::simulation::init::create_random_bodies;
-use crate::simulation::types::{Body, COMPUTE_WORKGROUP_SIZE, NUM_BODIES, SimulationState};
+use crate::simulation::manager::SimulationManager;
+use crate::simulation::types::{COMPUTE_WORKGROUP_SIZE, NUM_BODIES, SimulationState};
 
 pub struct Renderer {
     pub window: Arc<Window>,
@@ -27,8 +27,12 @@ pub struct Renderer {
     // Simulation state
     pub current_buffer: usize,
     pub last_update: Instant,
-    pub bodies: Vec<Body>,
     pub simulation_state: SimulationState,
+    pub simulation_manager: SimulationManager,
+
+    // UI state
+    pub show_info: bool,
+    pub simulation_changed: bool,
 }
 
 impl Renderer {
@@ -55,8 +59,11 @@ impl Renderer {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-        // Create buffers for simulation
-        let bodies = create_random_bodies(NUM_BODIES);
+        // Create simulation manager
+        let simulation_manager = SimulationManager::new();
+
+        // Get bodies from the initial simulation
+        let bodies = simulation_manager.get_bodies();
 
         // Create two buffers for ping-pong rendering
         let body_buffers = [
@@ -74,15 +81,12 @@ impl Renderer {
 
         // Create simulation state buffer with view and projection matrices
         let aspect = size.width as f32 / size.height as f32;
-        let simulation_state = SimulationState {
+
+        // Create initial simulation state
+        let mut simulation_state = SimulationState {
             delta_time: 0.001,
             _padding: [0.0; 3],
-            view_matrix: Mat4::look_at_rh(
-                Vec3::new(0.0, 20.0, 200.0), // Camera position
-                Vec3::new(0.0, 0.0, 0.0),    // Look target
-                Vec3::new(0.0, 1.0, 0.0),    // Up direction
-            )
-            .to_cols_array(),
+            view_matrix: Mat4::IDENTITY.to_cols_array(),
             projection_matrix: Mat4::perspective_rh(
                 45.0_f32.to_radians(),
                 aspect,
@@ -91,6 +95,9 @@ impl Renderer {
             )
             .to_cols_array(),
         };
+
+        // Update view matrix based on the current simulation
+        simulation_manager.update_simulation_state(&mut simulation_state);
 
         let simulation_state_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -255,8 +262,10 @@ impl Renderer {
             bind_groups,
             current_buffer: 0,
             last_update: Instant::now(),
-            bodies,
             simulation_state,
+            simulation_manager,
+            show_info: true,
+            simulation_changed: false,
         };
 
         // Configure surface for the first time
@@ -311,6 +320,27 @@ impl Renderer {
 
         // Update delta time in simulation state
         self.simulation_state.delta_time = dt;
+
+        // If simulation has changed, update the view matrix and buffers
+        if self.simulation_changed {
+            // Update camera position based on the current simulation
+            self.simulation_manager
+                .update_simulation_state(&mut self.simulation_state);
+
+            // Get new bodies from the simulation manager
+            let bodies = self.simulation_manager.get_bodies();
+
+            // Update the current buffer with the new bodies
+            self.queue.write_buffer(
+                &self.body_buffers[self.current_buffer],
+                0,
+                bytemuck::cast_slice(&bodies),
+            );
+
+            self.simulation_changed = false;
+        }
+
+        // Update simulation state buffer
         self.queue.write_buffer(
             &self.simulation_state_buffer,
             0,
@@ -388,10 +418,48 @@ impl Renderer {
 
         // Submit command buffer
         self.queue.submit([encoder.finish()]);
+
+        // If we want to show info, print the current simulation
+        if self.show_info {
+            let current_sim = self.simulation_manager.get_current_simulation();
+            println!(
+                "Simulation: {} - {} (Press 1-{} to switch, I to toggle info)",
+                current_sim.name(),
+                current_sim.description(),
+                self.simulation_manager.get_simulation_count()
+            );
+            self.show_info = false;
+        }
+
         self.window.pre_present_notify();
         surface_texture.present();
 
         // Swap buffers for ping-pong computation
         self.current_buffer = 1 - self.current_buffer;
+    }
+
+    pub fn switch_simulation(&mut self, index: usize) {
+        if self.simulation_manager.switch_to_simulation(index) {
+            self.simulation_changed = true;
+            self.show_info = true;
+        }
+    }
+
+    pub fn next_simulation(&mut self) {
+        if self.simulation_manager.next_simulation() {
+            self.simulation_changed = true;
+            self.show_info = true;
+        }
+    }
+
+    pub fn previous_simulation(&mut self) {
+        if self.simulation_manager.previous_simulation() {
+            self.simulation_changed = true;
+            self.show_info = true;
+        }
+    }
+
+    pub fn toggle_info(&mut self) {
+        self.show_info = true;
     }
 }

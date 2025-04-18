@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
@@ -45,6 +46,30 @@ impl ApplicationHandler for App {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always followed up by redraw request.
                 state.resize(size);
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key_code),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                match key_code {
+                    // Number keys for direct simulation selection
+                    KeyCode::Digit1 => state.switch_simulation(0),
+                    KeyCode::Digit2 => state.switch_simulation(1),
+
+                    // Next/previous simulation
+                    KeyCode::ArrowRight | KeyCode::KeyN => state.next_simulation(),
+                    KeyCode::ArrowLeft | KeyCode::KeyP => state.previous_simulation(),
+
+                    // Toggle info display
+                    KeyCode::KeyI => state.toggle_info(),
+
+                    _ => (),
+                }
             }
             _ => (),
         }
