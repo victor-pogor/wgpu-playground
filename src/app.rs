@@ -108,6 +108,7 @@ impl ApplicationHandler for App {
                     match key_code {
                         // Number keys for direct simulation selection
                         KeyCode::Digit1 => state.switch_simulation(0),
+                        KeyCode::Digit2 => state.switch_simulation(1),
 
                         // Next/previous simulation
                         KeyCode::ArrowRight | KeyCode::KeyN => state.next_simulation(),

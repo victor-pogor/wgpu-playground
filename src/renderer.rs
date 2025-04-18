@@ -355,8 +355,12 @@ impl Renderer {
         let dt = now.duration_since(self.last_update).as_secs_f32();
         self.last_update = now;
 
+        // Limit delta time to prevent large jumps in the simulation
+        // This is especially important on the first frame when dt can be very large
+        let clamped_dt = dt.min(0.016); // Cap at ~60 FPS time step (16ms)
+
         // Update delta time in simulation state
-        self.simulation_state.delta_time = dt;
+        self.simulation_state.delta_time = clamped_dt;
 
         // If simulation has changed, update the view matrix and buffers
         if self.simulation_changed {
@@ -529,17 +533,7 @@ impl Renderer {
         // Get target position (always looking at the center for now)
         let target_pos = glam::Vec3::new(0.0, 0.0, 0.0);
 
-        // Create view matrix differently based on camera position
-        let view_matrix = if camera_pos.z == 0.0 && camera_pos.x == 0.0 {
-            // For a perfect top-down view, we need a special approach
-            // When looking straight down, the traditional look_at can have issues
-            // Create a custom view matrix for top-down
-            Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-                * Mat4::from_translation(-glam::Vec3::new(0.0, 0.0, camera_height))
-        } else {
-            // Standard look-at for angled views
-            Mat4::look_at_rh(camera_pos, target_pos, glam::Vec3::Y)
-        };
+        let view_matrix = Mat4::look_at_rh(camera_pos, target_pos, glam::Vec3::Y);
 
         // Apply camera transformations to view matrix
         let final_view_matrix = view_matrix * camera_mat;
