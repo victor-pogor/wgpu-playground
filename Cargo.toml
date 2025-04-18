@@ -8,3 +8,6 @@ env_logger = "0.11.8"
 pollster = "0.4.0"
 wgpu = "25.0.0"
 winit = { version = "0.30.9", features = ["android-native-activity"] }
+bytemuck = { version = "1.14", features = ["derive"] }
+glam = "0.25"
+rand = "0.8"
