@@ -1,4 +1,3 @@
-pub mod galaxy;
 pub mod init;
 pub mod manager;
 pub mod solar_system;

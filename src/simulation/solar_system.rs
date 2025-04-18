@@ -23,13 +23,16 @@ impl Simulation for SolarSystemSimulation {
         // Scale factor to make the simulation visually appealing
         // Actual distances in AU would be too spread out for visualization
         let distance_scale = 10.0; // Scale down the distances
-        let size_scale = 20.0; // Scale up the sizes of smaller objects
+        let size_scale = 0.5; // Significantly reduced from 2.5 for more realistic planet sizes
+
+        // Minimum visual size to ensure small planets are still visible
+        let min_planet_size = 0.2; // Reduced from 0.8
 
         let mut bodies = Vec::with_capacity(count as usize);
 
-        // Sun - Mass is in Solar masses, converted to Earth masses for consistency
+        // Sun - The sun's radius is about 109 times Earth's radius
         let sun_mass = 333000.0; // Actual sun mass in Earth masses
-        let sun_visual_radius = 30.0; // Visual size for display purposes
+        let sun_visual_radius = 109.0 * size_scale * 0.7; // Slightly reduce sun size for better display
         bodies.push(Body {
             position: [0.0, 0.0, 0.0, sun_mass],
             velocity: [0.0, 0.0, 0.0, sun_visual_radius],
@@ -73,22 +76,8 @@ impl Simulation for SolarSystemSimulation {
             let x = distance_scaled * angle.cos();
             let z = distance_scaled * angle.sin();
 
-            // Incorporate orbital inclination
-            let inclination_rad = match i {
-                0 => 7.0,  // Mercury
-                1 => 3.4,  // Venus
-                2 => 0.0,  // Earth
-                3 => 1.9,  // Mars
-                4 => 1.3,  // Jupiter
-                5 => 2.5,  // Saturn
-                6 => 0.8,  // Uranus
-                7 => 1.8,  // Neptune
-                8 => 17.2, // Pluto
-                _ => 0.0,
-            } * std::f32::consts::PI
-                / 180.0;
-
-            let y = distance_scaled * angle.sin() * inclination_rad.sin();
+            // Remove orbital inclination for 2D view
+            let y = 0.0; // Set y to 0 for flat 2D representation
 
             // Calculate orbital velocity
             // For circular orbits, velocity is perpendicular to radius
@@ -97,7 +86,7 @@ impl Simulation for SolarSystemSimulation {
             let vz = speed * angle.cos();
 
             // Scale the radius for visual purposes
-            let visual_radius = radius * size_scale;
+            let visual_radius = (radius * size_scale).max(min_planet_size);
 
             // Add the planet with proper mass and visual radius
             bodies.push(Body {
@@ -127,13 +116,10 @@ impl Simulation for SolarSystemSimulation {
                 // Random angle
                 let angle = rng.gen_range(0.0..std::f32::consts::TAU);
 
-                // Inclination tends to be higher for scattered objects
-                let inclination = rng.gen_range(0.0..10.0) * std::f32::consts::PI / 180.0;
-
                 // Calculate position
                 let x = distance * angle.cos();
                 let z = distance * angle.sin();
-                let y = distance * angle.sin() * inclination.sin();
+                let y = 0.0; // Set y to 0 for flat 2D representation
 
                 // Calculated orbital velocity (slower for distant objects)
                 let period = distance.powf(1.5); // Kepler's Third Law: T² ∝ r³
@@ -178,7 +164,7 @@ impl Simulation for SolarSystemSimulation {
     }
 
     fn camera_position(&self) -> [f32; 3] {
-        [0.0, 100.0, 200.0] // Positioned to view the whole solar system
+        [0.0, 500.0, 150.0] // Positioned with a slight angle for better visibility
     }
 
     fn camera_target(&self) -> [f32; 3] {

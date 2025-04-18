@@ -94,31 +94,94 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
-    @location(1) point_size: f32,
+    @location(1) visual_radius: f32,
+    @location(2) point_coord: vec2<f32>, // For calculating circle in fragment shader
+    @location(3) clip_position: vec4<f32>, // Clip position for scaling
 };
 
 @vertex
-fn vertex_main(@builtin(instance_index) instance_idx: u32) -> VertexOutput {
+fn vertex_main(@builtin(instance_index) instance_idx: u32, 
+               @builtin(vertex_index) vertex_idx: u32) -> VertexOutput {
     let body = bodies_in[instance_idx];
+    
+    // Define a quad (2 triangles) for each particle
+    // We'll use these to draw a circle in the fragment shader
+    let vertices = array<vec2<f32>, 6>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, -1.0),
+        vec2<f32>(-1.0, 1.0),
+        vec2<f32>(-1.0, 1.0),
+        vec2<f32>(1.0, -1.0),
+        vec2<f32>(1.0, 1.0)
+    );
+
+    // Get the quad corner for this vertex
+    let corner = vertices[vertex_idx];
     
     // Transform position by view and projection matrices
     let world_pos = vec4<f32>(body.position.xyz, 1.0);
-    let clip_pos = sim.projectionMatrix * sim.viewMatrix * world_pos;
+    let view_pos = sim.viewMatrix * world_pos;
+    let clip_pos = sim.projectionMatrix * view_pos;
     
-    // Use the visual radius from velocity.w for point size
-    // Apply a scaling factor if needed to make it visible on screen
-    let point_size = max(body.velocity.w, 0.5);
+    // Get the visual radius and scale it based on distance from camera
+    // The scaling factor adjusts how the size changes with distance
+    let visual_radius = body.velocity.w;
+    
+    // Scale the quad based on visual radius
+    // For orthographic projection, we don't need to scale based on distance
+    var scaled_quad_pos = clip_pos;
+    let scaling_factor = 0.25; // Adjust for visibility with orthographic projection
+    let offset = corner * visual_radius * scaling_factor;
+    scaled_quad_pos.x = scaled_quad_pos.x + offset.x;
+    scaled_quad_pos.y = scaled_quad_pos.y + offset.y;
     
     var output: VertexOutput;
-    output.position = clip_pos;
+    output.position = scaled_quad_pos;
     output.color = body.color;
-    output.point_size = point_size;
+    output.visual_radius = visual_radius;
+    output.point_coord = corner; // Pass corner coordinate to fragment shader
+    output.clip_position = clip_pos;
     
     return output;
 }
 
-// Fragment shader for rendering particles
+// Helper to calculate aspect ratio
+fn aspect_ratio() -> f32 {
+    return 1.0; // This is an approximation - ideally we'd pass this from renderer
+}
+
+// Fragment shader for rendering particles as circles
 @fragment
-fn fragment_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
-    return color;
+fn fragment_main(
+    @location(0) color: vec4<f32>,
+    @location(1) visual_radius: f32,
+    @location(2) point_coord: vec2<f32>,
+    @location(3) clip_pos: vec4<f32>
+) -> @location(0) vec4<f32> {
+    // Calculate distance from center of quad
+    let distance_from_center = length(point_coord);
+    
+    // Discard fragments outside the circle
+    if (distance_from_center > 1.0) {
+        discard;
+    }
+
+    // Add a subtle edge smoothing while keeping planets solid
+    let edge_smoothness = 0.05;
+    let alpha = smoothstep(1.0, 1.0 - edge_smoothness, distance_from_center);
+    
+    // Choose alpha based on body type/size
+    var final_color = color.rgb;
+    var final_alpha = 1.0;
+    
+    // Make small bodies (asteroids) slightly transparent
+    if (visual_radius < 0.3) {
+        final_alpha = 0.7;
+    }
+    
+    // Apply edge feathering for all bodies
+    final_alpha *= alpha;
+    
+    // Return the color with computed alpha
+    return vec4<f32>(final_color, final_alpha);
 }

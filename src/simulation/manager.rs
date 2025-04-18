@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use crate::simulation::galaxy::GalaxySimulation;
 use crate::simulation::solar_system::SolarSystemSimulation;
 use crate::simulation::trait_def::Simulation;
 use crate::simulation::types::{Body, SimulationState};
@@ -15,7 +14,7 @@ impl SimulationManager {
     pub fn new() -> Self {
         // Create available simulations
         let simulations: Vec<Arc<dyn Simulation + Send + Sync>> =
-            vec![Arc::new(GalaxySimulation), Arc::new(SolarSystemSimulation)];
+            vec![Arc::new(SolarSystemSimulation)];
 
         // Initialize with the first simulation
         let bodies = simulations[0].initialize_bodies(crate::simulation::types::NUM_BODIES);

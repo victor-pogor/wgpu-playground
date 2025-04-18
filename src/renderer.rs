@@ -30,6 +30,18 @@ pub struct Renderer {
     pub simulation_state: SimulationState,
     pub simulation_manager: SimulationManager,
 
+    // Camera state
+    pub camera_offset: [f32; 2], // x, z offsets for panning
+    pub camera_zoom: f32,        // zoom factor
+    pub camera_rotation: f32,    // rotation in radians
+    pub base_camera_height: f32, // base height for the camera
+
+    // Mouse interaction state
+    pub mouse_pressed: bool,
+    pub last_mouse_position: [f32; 2],
+    pub ctrl_pressed: bool,
+    pub shift_pressed: bool,
+
     // UI state
     pub show_info: bool,
     pub simulation_changed: bool,
@@ -79,19 +91,19 @@ impl Renderer {
             }),
         ];
 
-        // Create simulation state buffer with view and projection matrices
-        let aspect = size.width as f32 / size.height as f32;
-
         // Create initial simulation state
         let mut simulation_state = SimulationState {
             delta_time: 0.001,
             _padding: [0.0; 3],
             view_matrix: Mat4::IDENTITY.to_cols_array(),
-            projection_matrix: Mat4::perspective_rh(
-                45.0_f32.to_radians(),
-                aspect,
-                0.1,    // Near plane
-                1000.0, // Far plane
+            // Use orthographic projection for 2D top-down view instead of perspective
+            projection_matrix: Mat4::orthographic_rh(
+                -500.0, // Left
+                500.0,  // Right
+                -500.0, // Bottom
+                500.0,  // Top
+                0.1,    // Near
+                1000.0, // Far
             )
             .to_cols_array(),
         };
@@ -230,7 +242,7 @@ impl Renderer {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::PointList,
+                topology: wgpu::PrimitiveTopology::TriangleList, // Changed from PointList to TriangleList
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: None,
@@ -248,6 +260,12 @@ impl Renderer {
             cache: None,
         });
 
+        // Get base camera position from simulation for initial setup
+        let camera_position = simulation_manager
+            .get_current_simulation()
+            .camera_position();
+        let base_camera_height = camera_position[1];
+
         let renderer = Self {
             window,
             device,
@@ -264,6 +282,14 @@ impl Renderer {
             last_update: Instant::now(),
             simulation_state,
             simulation_manager,
+            camera_offset: [0.0, 0.0],
+            camera_zoom: 1.0,
+            camera_rotation: 0.0,
+            base_camera_height,
+            mouse_pressed: false,
+            last_mouse_position: [0.0, 0.0],
+            ctrl_pressed: false,
+            shift_pressed: false,
             show_info: true,
             simulation_changed: false,
         };
@@ -298,8 +324,19 @@ impl Renderer {
 
         // Update projection matrix with new aspect ratio
         let aspect = new_size.width as f32 / new_size.height as f32;
-        self.simulation_state.projection_matrix =
-            Mat4::perspective_rh(45.0_f32.to_radians(), aspect, 0.1, 1000.0).to_cols_array();
+
+        // Maintain orthographic projection when resizing, adjusting for aspect ratio
+        let height = 500.0;
+        let width = height * aspect;
+        self.simulation_state.projection_matrix = Mat4::orthographic_rh(
+            -width,  // Left
+            width,   // Right
+            -height, // Bottom
+            height,  // Top
+            0.1,     // Near
+            1000.0,  // Far
+        )
+        .to_cols_array();
 
         // Update simulation state buffer
         self.queue.write_buffer(
@@ -398,7 +435,7 @@ impl Renderer {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.0,
                             g: 0.0,
-                            b: 0.05,
+                            b: 0.03,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -412,8 +449,8 @@ impl Renderer {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_groups[self.current_buffer], &[]);
 
-            // Draw NUM_BODIES instances
-            render_pass.draw(0..1, 0..NUM_BODIES);
+            // Draw 6 vertices (2 triangles) per body instance
+            render_pass.draw(0..6, 0..NUM_BODIES);
         }
 
         // Submit command buffer
@@ -461,5 +498,136 @@ impl Renderer {
 
     pub fn toggle_info(&mut self) {
         self.show_info = true;
+    }
+
+    // Camera control methods
+    pub fn update_camera_view(&mut self) {
+        // Get base camera position from simulation
+        let base_position = self
+            .simulation_manager
+            .get_current_simulation()
+            .camera_position();
+
+        // Apply camera transformations (pan, zoom, rotate)
+        let mut camera_mat = Mat4::IDENTITY;
+
+        // First apply rotation around Y axis
+        camera_mat = camera_mat * Mat4::from_rotation_y(self.camera_rotation);
+
+        // Then apply translation (pan)
+        camera_mat = camera_mat
+            * Mat4::from_translation(glam::Vec3::new(
+                self.camera_offset[0],
+                0.0,
+                self.camera_offset[1],
+            ));
+
+        // Calculate zoom-adjusted camera position
+        let camera_height = base_position[1] / self.camera_zoom;
+        let camera_pos = glam::Vec3::new(base_position[0], camera_height, base_position[2]);
+
+        // Get target position (always looking at the center for now)
+        let target_pos = glam::Vec3::new(0.0, 0.0, 0.0);
+
+        // Create view matrix differently based on camera position
+        let view_matrix = if camera_pos.z == 0.0 && camera_pos.x == 0.0 {
+            // For a perfect top-down view, we need a special approach
+            // When looking straight down, the traditional look_at can have issues
+            // Create a custom view matrix for top-down
+            Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                * Mat4::from_translation(-glam::Vec3::new(0.0, 0.0, camera_height))
+        } else {
+            // Standard look-at for angled views
+            Mat4::look_at_rh(camera_pos, target_pos, glam::Vec3::Y)
+        };
+
+        // Apply camera transformations to view matrix
+        let final_view_matrix = view_matrix * camera_mat;
+
+        // Update simulation state with new view matrix
+        self.simulation_state.view_matrix = final_view_matrix.to_cols_array();
+    }
+
+    pub fn pan_camera(&mut self, delta_x: f32, delta_y: f32) {
+        // Scale pan amount based on zoom level (faster pan when zoomed out)
+        let pan_speed = 1.0 / self.camera_zoom;
+
+        // Apply the rotation to the pan direction
+        let sin_rot = self.camera_rotation.sin();
+        let cos_rot = self.camera_rotation.cos();
+
+        // Apply rotation to get world-space pan
+        self.camera_offset[0] += (delta_x * cos_rot - delta_y * sin_rot) * pan_speed;
+        self.camera_offset[1] += (delta_x * sin_rot + delta_y * cos_rot) * pan_speed;
+
+        // Update the view matrix with new camera position
+        self.update_camera_view();
+    }
+
+    pub fn zoom_camera(&mut self, delta: f32) {
+        // Apply zoom (delta is positive for zoom in, negative for zoom out)
+        let zoom_speed = 0.1;
+        let new_zoom = self.camera_zoom * (1.0 + delta * zoom_speed);
+
+        // Clamp zoom to reasonable limits
+        self.camera_zoom = new_zoom.clamp(0.1, 10.0);
+
+        // Update the view matrix with new zoom
+        self.update_camera_view();
+    }
+
+    pub fn rotate_camera(&mut self, delta: f32) {
+        // Apply rotation (in radians)
+        self.camera_rotation += delta * 0.01;
+
+        // Keep rotation in 0-2π range for simplicity
+        while self.camera_rotation > std::f32::consts::TAU {
+            self.camera_rotation -= std::f32::consts::TAU;
+        }
+        while self.camera_rotation < 0.0 {
+            self.camera_rotation += std::f32::consts::TAU;
+        }
+
+        // Update the view matrix with new rotation
+        self.update_camera_view();
+    }
+
+    // Input handling methods
+    pub fn handle_mouse_press(&mut self, position: [f32; 2], ctrl: bool, shift: bool) {
+        self.mouse_pressed = true;
+        self.last_mouse_position = position;
+        self.ctrl_pressed = ctrl;
+        self.shift_pressed = shift;
+    }
+
+    pub fn handle_mouse_release(&mut self) {
+        self.mouse_pressed = false;
+    }
+
+    pub fn handle_mouse_move(&mut self, position: [f32; 2]) {
+        if self.mouse_pressed {
+            let delta_x = position[0] - self.last_mouse_position[0];
+            let delta_y = position[1] - self.last_mouse_position[1];
+
+            if self.ctrl_pressed {
+                // Pan with Ctrl+drag
+                self.pan_camera(delta_x, delta_y);
+            } else if self.shift_pressed {
+                // Rotate with Shift+drag
+                self.rotate_camera(delta_x);
+            }
+
+            self.last_mouse_position = position;
+        }
+    }
+
+    pub fn handle_mouse_wheel(&mut self, delta: f32) {
+        // Zoom with mouse wheel
+        self.zoom_camera(delta);
+    }
+
+    pub fn handle_key_state(&mut self, ctrl: bool, shift: bool) {
+        self.ctrl_pressed = ctrl;
+        self.shift_pressed = shift;
     }
 }
