@@ -130,8 +130,7 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32,
     // Scale the quad based on visual radius
     // For orthographic projection, we don't need to scale based on distance
     var scaled_quad_pos = clip_pos;
-    let scaling_factor = 0.25; // Adjust for visibility with orthographic projection
-    let offset = corner * visual_radius * scaling_factor;
+    let offset = corner * visual_radius;
     scaled_quad_pos.x = scaled_quad_pos.x + offset.x;
     scaled_quad_pos.y = scaled_quad_pos.y + offset.y;
     
@@ -143,11 +142,6 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32,
     output.clip_position = clip_pos;
     
     return output;
-}
-
-// Helper to calculate aspect ratio
-fn aspect_ratio() -> f32 {
-    return 1.0; // This is an approximation - ideally we'd pass this from renderer
 }
 
 // Fragment shader for rendering particles as circles
@@ -166,21 +160,16 @@ fn fragment_main(
         discard;
     }
 
-    // Add a subtle edge smoothing while keeping planets solid
-    let edge_smoothness = 0.05;
-    let alpha = smoothstep(1.0, 1.0 - edge_smoothness, distance_from_center);
+    // Create a smoother edge with configurable width
+    let edge_smoothness = 0.1; // Increased for more gradual fade
+    let alpha_edge = smoothstep(1.0, 1.0 - edge_smoothness, distance_from_center);
     
-    // Choose alpha based on body type/size
+    // Start with the original color (including its alpha)
     var final_color = color.rgb;
-    var final_alpha = 1.0;
     
-    // Make small bodies (asteroids) slightly transparent
-    if (visual_radius < 0.3) {
-        final_alpha = 0.7;
-    }
-    
-    // Apply edge feathering for all bodies
-    final_alpha *= alpha;
+    // Base alpha on the original color's alpha and edge smoothing
+    // All objects will be opaque (except for edge smoothing)
+    var final_alpha = color.a * alpha_edge;
     
     // Return the color with computed alpha
     return vec4<f32>(final_color, final_alpha);
