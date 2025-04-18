@@ -8,11 +8,16 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::renderer::Renderer;
+use crate::rendering::Renderer;
 
+// Store modifier states at the App level
 #[derive(Default)]
 pub struct App {
     state: Option<Renderer>,
+    ctrl_pressed: bool,
+    shift_pressed: bool,
+    last_cursor_x: f32,
+    last_cursor_y: f32,
 }
 
 impl ApplicationHandler for App {
@@ -48,11 +53,12 @@ impl ApplicationHandler for App {
                 state.resize(size);
             }
             WindowEvent::ModifiersChanged(modifiers) => {
-                // Track modifier key states (Ctrl, Shift)
-                state.handle_key_state(
-                    modifiers.state().control_key(),
-                    modifiers.state().shift_key(),
-                );
+                // Track modifier key states (Ctrl, Shift) at the App level
+                self.ctrl_pressed = modifiers.state().control_key();
+                self.shift_pressed = modifiers.state().shift_key();
+
+                // Also pass them to the renderer for its internal tracking
+                state.handle_key_state(self.ctrl_pressed, self.shift_pressed);
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 // Handle mouse wheel for zoom
@@ -75,7 +81,13 @@ impl ApplicationHandler for App {
             } => {
                 match button_state {
                     ElementState::Pressed => {
-                        // We'll initiate the position in the MouseMove handler
+                        // Rather than trying to query the position now, we'll use
+                        // the last known position from CursorMoved events
+                        state.handle_mouse_press(
+                            [self.last_cursor_x, self.last_cursor_y],
+                            self.ctrl_pressed,
+                            self.shift_pressed,
+                        );
                     }
                     ElementState::Released => {
                         state.handle_mouse_release();
@@ -87,13 +99,12 @@ impl ApplicationHandler for App {
                 let x = position.x as f32;
                 let y = position.y as f32;
 
-                if state.mouse_pressed {
-                    // If mouse is already pressed, process movement
-                    state.handle_mouse_move([x, y]);
-                } else if state.ctrl_pressed || state.shift_pressed {
-                    // Start tracking if ctrl or shift is pressed, and we get movement
-                    state.handle_mouse_press([x, y], state.ctrl_pressed, state.shift_pressed);
-                }
+                // Store the last known cursor position
+                self.last_cursor_x = x;
+                self.last_cursor_y = y;
+
+                // The camera now handles all the logic for tracking mouse state internally
+                state.handle_mouse_move([x, y]);
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -119,11 +130,21 @@ impl ApplicationHandler for App {
 
                         // Reset camera
                         KeyCode::KeyR => {
-                            state.camera_offset = [0.0, 0.0];
-                            state.camera_zoom = 1.0;
-                            state.camera_rotation = 0.0;
-                            state.update_camera_view();
+                            // Reset camera to default state
+                            state.reset_camera();
                         }
+
+                        // Camera controls using keyboard
+                        KeyCode::KeyW => state.pan_camera(0.0, 10.0), // Pan up
+                        KeyCode::KeyS => state.pan_camera(0.0, -10.0), // Pan down
+                        KeyCode::KeyA => state.pan_camera(10.0, 0.0), // Pan left
+                        KeyCode::KeyD => state.pan_camera(-10.0, 0.0), // Pan right
+
+                        KeyCode::KeyQ => state.rotate_camera(-1.0), // Rotate counter-clockwise
+                        KeyCode::KeyE => state.rotate_camera(1.0),  // Rotate clockwise
+
+                        KeyCode::Equal | KeyCode::NumpadAdd => state.zoom_camera(0.5), // Zoom in
+                        KeyCode::Minus | KeyCode::NumpadSubtract => state.zoom_camera(-0.5), // Zoom out
 
                         _ => (),
                     }

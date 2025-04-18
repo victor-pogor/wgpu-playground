@@ -1,5 +1,5 @@
 mod app;
-mod renderer;
+mod rendering;
 mod simulation;
 
 fn main() {
