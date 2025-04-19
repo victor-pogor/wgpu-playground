@@ -1,3 +1,3 @@
 mod pentagon;
 
-pub(crate) use crate::shaders::pentagon::{INDICES, VERTICES, render_triangle};
+pub(crate) use pentagon::PentagonRenderPipeline;

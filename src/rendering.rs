@@ -1,28 +1,21 @@
 mod render_pass;
-mod render_pipeline;
 mod surface;
 
-use render_pipeline::RenderPipelines;
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use render_pass::create_background_render_pass;
 use surface::configure_surface;
 
-use crate::shaders::{INDICES, VERTICES};
+use crate::shaders::PentagonRenderPipeline;
 
 pub(crate) struct Renderer {
     window: Arc<Window>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface<'static>,
-    surface_config: wgpu::SurfaceConfiguration,
-    render_pipelines: RenderPipelines,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub size: winit::dpi::PhysicalSize<u32>,
+    pub surface: wgpu::Surface<'static>,
+    pub surface_config: wgpu::SurfaceConfiguration,
 }
 
 impl Renderer {
@@ -81,21 +74,6 @@ impl Renderer {
 
         // Configure surface for the first time
         let surface_config = configure_surface(&device, &size, &surface, &surface_caps);
-        let render_pipelines = RenderPipelines::new(&device, &surface_config);
-
-        let dev: wgpu::Device = device.clone();
-        let vertex_buffer = dev.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
 
         let state = Renderer {
             window,
@@ -104,10 +82,6 @@ impl Renderer {
             size,
             surface,
             surface_config,
-            render_pipelines,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
         };
 
         state
@@ -153,13 +127,7 @@ impl Renderer {
                 },
             );
 
-            render_pass.set_pipeline(&self.render_pipelines.render_triangle_pipeline);
-
-            let num_vertices = VERTICES.len() as u32;
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-            render_pass.draw(0..num_vertices, 0..1);
+            PentagonRenderPipeline::new(self).render_pass(&mut render_pass);
         }
 
         // submit will accept anything that implements IntoIter
