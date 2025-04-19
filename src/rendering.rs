@@ -1,8 +1,10 @@
+mod render_pass;
 mod surface;
 
 use std::sync::Arc;
 use winit::window::Window;
 
+use render_pass::create_background_render_pass;
 use surface::configure_surface;
 
 pub struct Renderer {
@@ -115,25 +117,16 @@ impl Renderer {
             });
 
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Background color render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
+            let _render_pass = create_background_render_pass(
+                &mut encoder,
+                &texture_view,
+                wgpu::Color {
+                    r: 0.1,
+                    g: 0.2,
+                    b: 0.3,
+                    a: 1.0,
+                },
+            );
         }
 
         // submit will accept anything that implements IntoIter
