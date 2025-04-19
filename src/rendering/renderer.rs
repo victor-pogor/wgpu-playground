@@ -95,12 +95,6 @@ impl Renderer {
             &simulation_state,
         );
 
-        // Get base camera position from simulation for initial setup
-        let camera_position = simulation_manager
-            .get_current_simulation()
-            .camera_position();
-        let base_camera_height = camera_position[1];
-
         let renderer = Self {
             window,
             device,
@@ -112,7 +106,7 @@ impl Renderer {
             last_update: Instant::now(),
             simulation_state,
             simulation_manager,
-            camera: Camera::new(base_camera_height),
+            camera: Camera::new(),
             show_info: true,
             simulation_changed: false,
         };
@@ -148,16 +142,18 @@ impl Renderer {
         // Update projection matrix with new aspect ratio
         let aspect = new_size.width as f32 / new_size.height as f32;
 
-        // Maintain orthographic projection when resizing, adjusting for aspect ratio
-        let height = 500.0;
-        let width = height * aspect;
+        // Create orthographic projection that preserves circles
+        // Base height is fixed, width is adjusted by aspect ratio
+        let base_height = 500.0;
+        let width = base_height * aspect;
+
         self.simulation_state.projection_matrix = Mat4::orthographic_rh(
-            -width,  // Left
-            width,   // Right
-            -height, // Bottom
-            height,  // Top
-            0.1,     // Near
-            1000.0,  // Far
+            -width,       // Left
+            width,        // Right
+            -base_height, // Bottom
+            base_height,  // Top
+            0.1,          // Near
+            1000.0,       // Far
         )
         .to_cols_array();
 
@@ -212,6 +208,7 @@ impl Renderer {
             .surface
             .get_current_texture()
             .expect("failed to acquire next swapchain texture");
+
         let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
@@ -257,7 +254,7 @@ impl Renderer {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.0,
                             g: 0.0,
-                            b: 0.03,
+                            b: 0.05, // Slightly increased blue for better cosmic background
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -357,15 +354,8 @@ impl Renderer {
     }
 
     pub fn reset_camera(&mut self) {
-        // Get the base camera position from the current simulation
-        let camera_position = self
-            .simulation_manager
-            .get_current_simulation()
-            .camera_position();
-        let base_camera_height = camera_position[1];
-
         // Create a new camera with default settings
-        self.camera = Camera::new(base_camera_height);
+        self.camera = Camera::new();
 
         // Update the view matrix based on the reset camera
         self.update_camera_view();

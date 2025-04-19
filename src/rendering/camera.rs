@@ -6,7 +6,6 @@ pub struct Camera {
     offset: [f32; 2], // x, z offsets for panning
     zoom: f32,        // zoom factor
     rotation: f32,    // rotation in radians
-    base_height: f32, // base height for the camera
 
     // Mouse interaction state for camera control
     mouse_pressed: bool,
@@ -16,12 +15,11 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(base_height: f32) -> Self {
+    pub fn new() -> Self {
         Self {
             offset: [0.0, 0.0],
             zoom: 1.0,
             rotation: 0.0,
-            base_height,
             mouse_pressed: false,
             last_mouse_position: [0.0, 0.0],
             ctrl_pressed: false,
@@ -40,9 +38,14 @@ impl Camera {
         camera_mat =
             camera_mat * Mat4::from_translation(Vec3::new(self.offset[0], 0.0, self.offset[1]));
 
-        // Calculate zoom-adjusted camera position
-        let camera_height = base_position[1] / self.zoom;
-        let camera_pos = Vec3::new(base_position[0], camera_height, base_position[2]);
+        // Calculate camera position with proper zoom
+        // When zooming in, we move the camera closer to the target
+        // When zooming out, we move the camera farther from the target
+        let camera_pos = Vec3::new(
+            base_position[0],
+            base_position[1] / self.zoom,
+            base_position[2],
+        );
 
         // Get target position (always looking at the center for now)
         let target_pos = Vec3::new(0.0, 0.0, 0.0);
@@ -67,12 +70,13 @@ impl Camera {
     }
 
     pub fn zoom(&mut self, delta: f32) {
-        // Apply zoom (delta is positive for zoom in, negative for zoom out)
+        // Use exponential zoom for more natural feel
+        // Positive delta = zoom in, negative delta = zoom out
         let zoom_speed = 0.1;
-        let new_zoom = self.zoom * (1.0 + delta * zoom_speed);
+        let zoom_factor = 1.0 + delta * zoom_speed;
 
-        // Clamp zoom to reasonable limits
-        self.zoom = new_zoom.clamp(0.1, 10.0);
+        // Apply zoom and clamp to reasonable values
+        self.zoom = (self.zoom * zoom_factor).clamp(0.1, 10.0);
     }
 
     pub fn rotate(&mut self, delta: f32) {

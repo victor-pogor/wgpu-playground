@@ -94,9 +94,7 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
-    @location(1) visual_radius: f32,
-    @location(2) point_coord: vec2<f32>, // For calculating circle in fragment shader
-    @location(3) clip_position: vec4<f32>, // Clip position for scaling
+    @location(1) point_coord: vec2<f32>, // For calculating circle in fragment shader
 };
 
 @vertex
@@ -121,25 +119,32 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32,
     // Transform position by view and projection matrices
     let world_pos = vec4<f32>(body.position.xyz, 1.0);
     let view_pos = sim.viewMatrix * world_pos;
-    let clip_pos = sim.projectionMatrix * view_pos;
     
-    // Get the visual radius and scale it based on distance from camera
-    // The scaling factor adjusts how the size changes with distance
+    // Get the visual radius from body data
     let visual_radius = body.velocity.w;
     
-    // Scale the quad based on visual radius
-    // For orthographic projection, we don't need to scale based on distance
-    var scaled_quad_pos = clip_pos;
-    let offset = corner * visual_radius;
-    scaled_quad_pos.x = scaled_quad_pos.x + offset.x;
-    scaled_quad_pos.y = scaled_quad_pos.y + offset.y;
+    // Transform to clip space
+    let clip_pos = sim.projectionMatrix * view_pos;
+    
+    // Apply a fixed scale factor that will look consistent regardless of zoom level
+    // This ensures particles maintain a reasonable size when zoomed out
+    let base_size = visual_radius * 2.0;
+    
+    // Scale the particle based on its distance from camera
+    // Use a mix of fixed size and perspective-correct size for better visual balance
+    let perspective_factor = 0.5; // Balance between fixed size and perspective correct
+    let dist_scale = mix(1.0, 1.0 / max(0.01, abs(clip_pos.w)), perspective_factor);
+    let final_scale = base_size * dist_scale;
+    
+    // Apply the scale to the vertex position in clip space
+    var scaled_pos = clip_pos;
+    scaled_pos.x += corner.x * final_scale;
+    scaled_pos.y += corner.y * final_scale;
     
     var output: VertexOutput;
-    output.position = scaled_quad_pos;
+    output.position = scaled_pos;
     output.color = body.color;
-    output.visual_radius = visual_radius;
-    output.point_coord = corner; // Pass corner coordinate to fragment shader
-    output.clip_position = clip_pos;
+    output.point_coord = corner;
     
     return output;
 }
@@ -148,9 +153,7 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32,
 @fragment
 fn fragment_main(
     @location(0) color: vec4<f32>,
-    @location(1) visual_radius: f32,
-    @location(2) point_coord: vec2<f32>,
-    @location(3) clip_pos: vec4<f32>
+    @location(1) point_coord: vec2<f32>
 ) -> @location(0) vec4<f32> {
     // Calculate distance from center of quad
     let distance_from_center = length(point_coord);
@@ -161,16 +164,15 @@ fn fragment_main(
     }
 
     // Create a smoother edge with configurable width
-    let edge_smoothness = 0.1; // Increased for more gradual fade
-    let alpha_edge = smoothstep(1.0, 1.0 - edge_smoothness, distance_from_center);
+    let edge_width = 0.05; // Increase edge width for better blending
+    let alpha_factor = 1.0 - smoothstep(1.0 - edge_width, 1.0, distance_from_center);
     
-    // Start with the original color (including its alpha)
-    var final_color = color.rgb;
+    // Apply a radial gradient to make the center brighter
+    let brightness = mix(1.0, 0.7, distance_from_center * distance_from_center);
+    let final_color = color.rgb * brightness;
     
-    // Base alpha on the original color's alpha and edge smoothing
-    // All objects will be opaque (except for edge smoothing)
-    var final_alpha = color.a * alpha_edge;
+    // Apply the original alpha from color, but modulate by our edge factor
+    let final_alpha = color.a * alpha_factor;
     
-    // Return the color with computed alpha
     return vec4<f32>(final_color, final_alpha);
 }
