@@ -1,13 +1,18 @@
 mod render_pass;
 mod surface;
 
-use std::sync::Arc;
+use render_pass::create_background_render_pass;
+use std::{sync::Arc, time::Instant};
 use winit::window::Window;
 
-use render_pass::create_background_render_pass;
 use surface::configure_surface;
 
-use crate::shaders::PentagonRenderPipeline;
+use crate::simulation::{
+    config::RenderConfig,
+    manager::SimulationManager,
+    resources::SimulationResources,
+    types::{COMPUTE_WORKGROUP_SIZE, NUM_BODIES, SimulationState},
+};
 
 pub(crate) struct Renderer {
     window: Arc<Window>,
@@ -16,6 +21,13 @@ pub(crate) struct Renderer {
     pub size: winit::dpi::PhysicalSize<u32>,
     pub surface: wgpu::Surface<'static>,
     pub surface_config: wgpu::SurfaceConfiguration,
+    pub render_config: RenderConfig,
+    pub simulation_resources: SimulationResources,
+    pub last_update: Instant,
+    pub simulation_state: SimulationState,
+    pub simulation_manager: SimulationManager,
+    pub show_info: bool,
+    pub simulation_changed: bool,
 }
 
 impl Renderer {
@@ -75,6 +87,21 @@ impl Renderer {
         // Configure surface for the first time
         let surface_config = configure_surface(&device, &size, &surface, &surface_caps);
 
+        // Create simulation manager
+        let simulation_manager = SimulationManager::new();
+
+        // Create initial simulation state
+        let simulation_state = SimulationState {
+            delta_time: 0.001,
+            _padding: [0.0; 3],
+        };
+
+        // Create render configuration (pipelines and bind group layouts)
+        let render_config = RenderConfig::new(&device, surface_config.format);
+
+        // Create simulation resources (buffers and bind groups)
+        let simulation_resources = SimulationResources::new(&device, &simulation_manager, &render_config, &simulation_state);
+
         let state = Renderer {
             window,
             device,
@@ -82,6 +109,13 @@ impl Renderer {
             size,
             surface,
             surface_config,
+            render_config,
+            simulation_resources,
+            last_update: Instant::now(),
+            simulation_state,
+            simulation_manager,
+            show_info: true,
+            simulation_changed: false,
         };
 
         state
@@ -115,25 +149,61 @@ impl Renderer {
             label: Some("WebGPU Command Encoder"),
         });
 
+        // Compute pass - update body positions
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("N-Body Compute Pass"),
+                timestamp_writes: None,
+            });
+
+            compute_pass.set_pipeline(&self.render_config.compute_pipeline);
+            compute_pass.set_bind_group(0, &self.simulation_resources.bind_groups[self.simulation_resources.current_buffer], &[]);
+
+            // Dispatch compute work groups
+            let workgroup_count = (NUM_BODIES + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
+            compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
+        }
+
+        // Render pass - draw the bodies
         {
             let mut render_pass = create_background_render_pass(
                 &mut encoder,
                 &texture_view,
                 wgpu::Color {
-                    r: 0.1,
-                    g: 0.2,
-                    b: 0.3,
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.05, // Slightly increased blue for better cosmic background
                     a: 1.0,
                 },
             );
 
-            PentagonRenderPipeline::new(self).render_pass(&mut render_pass);
+            render_pass.set_pipeline(&self.render_config.render_pipeline);
+            render_pass.set_bind_group(0, &self.simulation_resources.bind_groups[self.simulation_resources.current_buffer], &[]);
+
+            // Draw 6 vertices (2 triangles) per body instance
+            render_pass.draw(0..6, 0..NUM_BODIES);
         }
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
+
+        // If we want to show info, print the current simulation
+        if self.show_info {
+            let current_sim = self.simulation_manager.get_current_simulation();
+            println!(
+                "Simulation: {} - {} (Press 1-{} to switch, I to toggle info)",
+                current_sim.name(),
+                current_sim.description(),
+                self.simulation_manager.get_simulation_count()
+            );
+            self.show_info = false;
+        }
+
         self.window.pre_present_notify();
         surface_texture.present();
+
+        // Swap buffers for ping-pong computation
+        self.simulation_resources.swap_buffers();
 
         Ok(())
     }
@@ -142,5 +212,30 @@ impl Renderer {
         // The update method is called once per frame before rendering
         // Currently no state updates are needed, but this will be used
         // for animations, physics simulations, etc.
+    }
+
+    pub(crate) fn switch_simulation(&mut self, index: usize) {
+        if self.simulation_manager.switch_to_simulation(index) {
+            self.simulation_changed = true;
+            self.show_info = true;
+        }
+    }
+
+    pub(crate) fn next_simulation(&mut self) {
+        if self.simulation_manager.next_simulation() {
+            self.simulation_changed = true;
+            self.show_info = true;
+        }
+    }
+
+    pub(crate) fn previous_simulation(&mut self) {
+        if self.simulation_manager.previous_simulation() {
+            self.simulation_changed = true;
+            self.show_info = true;
+        }
+    }
+
+    pub(crate) fn toggle_info(&mut self) {
+        self.show_info = true;
     }
 }

@@ -1,6 +1,6 @@
 mod app;
 mod rendering;
-mod shaders;
+mod simulation;
 
 use app::App;
 use winit::event_loop::{ControlFlow, EventLoop};

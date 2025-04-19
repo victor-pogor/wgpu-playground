@@ -1,7 +1,12 @@
 use log;
 use std::sync::Arc;
 
-use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
+use winit::{
+    application::ApplicationHandler,
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
+};
 
 use crate::rendering::Renderer;
 
@@ -12,7 +17,7 @@ pub(crate) struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let (monitor_width, monitor_height) = compute_screen_size(event_loop);
+        let (_monitor_width, monitor_height) = compute_screen_size(event_loop);
 
         // Calculate window size as percentage of monitor size (80% width, 60% height)
         // let window_width = (monitor_width as f32 * 0.8) as u32;
@@ -63,6 +68,26 @@ impl ApplicationHandler for App {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always followed up by redraw request.
                 state.resize(size);
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key_code),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => {
+                if key_state == ElementState::Pressed {
+                    match key_code {
+                        KeyCode::Digit1 => state.switch_simulation(0),
+                        KeyCode::Digit2 => state.switch_simulation(1),
+                        KeyCode::ArrowRight => state.next_simulation(),
+                        KeyCode::ArrowLeft => state.previous_simulation(),
+                        KeyCode::KeyI => state.toggle_info(),
+                        _ => (),
+                    }
+                }
             }
             _ => (),
         }
