@@ -10,7 +10,7 @@ use winit::window::Window;
 use render_pass::create_background_render_pass;
 use surface::configure_surface;
 
-use crate::shaders::VERTICES;
+use crate::shaders::{INDICES, VERTICES};
 
 pub(crate) struct Renderer {
     window: Arc<Window>,
@@ -21,6 +21,8 @@ pub(crate) struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
     render_pipelines: RenderPipelines,
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 }
 
 impl Renderer {
@@ -88,6 +90,13 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let num_indices = INDICES.len() as u32;
+
         let state = Renderer {
             window,
             device,
@@ -97,6 +106,8 @@ impl Renderer {
             surface_config,
             render_pipelines,
             vertex_buffer,
+            index_buffer,
+            num_indices,
         };
 
         state
@@ -146,6 +157,8 @@ impl Renderer {
 
             let num_vertices = VERTICES.len() as u32;
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
             render_pass.draw(0..num_vertices, 0..1);
         }
 
