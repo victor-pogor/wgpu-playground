@@ -1,6 +1,9 @@
-use std::sync::Arc;
+mod surface;
 
+use std::sync::Arc;
 use winit::window::Window;
+
+use surface::configure_surface;
 
 pub struct Renderer {
     window: Arc<Window>,
@@ -93,38 +96,51 @@ impl Renderer {
         &self.window
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Render the scene
+        // Create texture view
+        let surface_texture = self
+            .surface
+            .get_current_texture()
+            .expect("failed to acquire next swapchain texture");
+
+        let texture_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("WebGPU Command Encoder"),
+            });
+
+        {
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Background color render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &texture_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+        }
+
+        // submit will accept anything that implements IntoIter
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.window.pre_present_notify();
+        surface_texture.present();
+
+        Ok(())
     }
-}
-
-fn configure_surface(
-    device: &wgpu::Device,
-    size: &winit::dpi::PhysicalSize<u32>,
-    surface: &wgpu::Surface<'static>,
-    surface_caps: &wgpu::SurfaceCapabilities,
-) -> wgpu::SurfaceConfiguration {
-    // Shader code in this tutorial assumes an sRGB surface texture. Using a different
-    // one will result in all the colors coming out darker. If you want to support non
-    // sRGB surfaces, you'll need to account for that when drawing to the frame.
-    let surface_format = surface_caps
-        .formats
-        .iter()
-        .find(|f| f.is_srgb())
-        .copied()
-        .unwrap_or(surface_caps.formats[0]);
-
-    let surface_config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface_format,
-        width: size.width,
-        height: size.height,
-        present_mode: surface_caps.present_modes[0],
-        alpha_mode: surface_caps.alpha_modes[0],
-        view_formats: vec![],
-        desired_maximum_frame_latency: 2,
-    };
-
-    surface.configure(&device, &surface_config);
-    surface_config
 }

@@ -42,7 +42,9 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                state.render();
+                if let Err(e) = state.render() {
+                    eprintln!("Render error: {:?}", e);
+                }
                 // Emits a new redraw requested event.
                 state.get_window().request_redraw();
             }
