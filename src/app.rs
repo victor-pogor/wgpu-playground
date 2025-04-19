@@ -15,8 +15,9 @@ impl ApplicationHandler for App {
         let (monitor_width, monitor_height) = compute_screen_size(event_loop);
 
         // Calculate window size as percentage of monitor size (80% width, 60% height)
-        let window_width = (monitor_width as f32 * 0.8) as u32;
+        // let window_width = (monitor_width as f32 * 0.8) as u32;
         let window_height = (monitor_height as f32 * 0.6) as u32;
+        let window_width = window_height as u32;
 
         // Create the actual window with the calculated size
         let window_attributes = Window::default_attributes()

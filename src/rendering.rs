@@ -1,6 +1,8 @@
 mod render_pass;
+mod render_pipeline;
 mod surface;
 
+use render_pipeline::RenderPipelines;
 use std::sync::Arc;
 use winit::window::Window;
 
@@ -14,6 +16,7 @@ pub struct Renderer {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
+    render_pipelines: RenderPipelines,
 }
 
 impl Renderer {
@@ -72,6 +75,7 @@ impl Renderer {
 
         // Configure surface for the first time
         let surface_config = configure_surface(&device, &size, &surface, &surface_caps);
+        let render_pipelines = RenderPipelines::new(&device, &surface_config);
 
         let state = Renderer {
             window,
@@ -80,6 +84,7 @@ impl Renderer {
             size,
             surface,
             surface_config,
+            render_pipelines,
         };
 
         state
@@ -121,7 +126,7 @@ impl Renderer {
             });
 
         {
-            let _render_pass = create_background_render_pass(
+            let mut render_pass = create_background_render_pass(
                 &mut encoder,
                 &texture_view,
                 wgpu::Color {
@@ -131,6 +136,9 @@ impl Renderer {
                     a: 1.0,
                 },
             );
+
+            render_pass.set_pipeline(&self.render_pipelines.render_triangle_pipeline);
+            render_pass.draw(0..3, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
