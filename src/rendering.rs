@@ -8,7 +8,7 @@ pub struct Renderer {
     queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
-    surface_caps: wgpu::SurfaceCapabilities,
+    surface_config: wgpu::SurfaceConfiguration,
 }
 
 impl Renderer {
@@ -65,22 +65,29 @@ impl Renderer {
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
 
+        // Configure surface for the first time
+        let surface_config = configure_surface(&device, &size, &surface, &surface_caps);
+
         let state = Renderer {
             window,
             device,
             queue,
             size,
             surface,
-            surface_caps,
+            surface_config,
         };
-
-        // Configure surface for the first time
-        state.configure_surface();
 
         state
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {}
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.size = new_size;
+            self.surface_config.width = new_size.width;
+            self.surface_config.height = new_size.height;
+            self.surface.configure(&self.device, &self.surface_config);
+        }
+    }
 
     pub fn get_window(&self) -> &Window {
         &self.window
@@ -89,30 +96,35 @@ impl Renderer {
     pub fn render(&mut self) {
         // Render the scene
     }
+}
 
-    fn configure_surface(&self) {
-        // Shader code in this tutorial assumes an sRGB surface texture. Using a different
-        // one will result in all the colors coming out darker. If you want to support non
-        // sRGB surfaces, you'll need to account for that when drawing to the frame.
-        let surface_format = self
-            .surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(self.surface_caps.formats[0]);
+fn configure_surface(
+    device: &wgpu::Device,
+    size: &winit::dpi::PhysicalSize<u32>,
+    surface: &wgpu::Surface<'static>,
+    surface_caps: &wgpu::SurfaceCapabilities,
+) -> wgpu::SurfaceConfiguration {
+    // Shader code in this tutorial assumes an sRGB surface texture. Using a different
+    // one will result in all the colors coming out darker. If you want to support non
+    // sRGB surfaces, you'll need to account for that when drawing to the frame.
+    let surface_format = surface_caps
+        .formats
+        .iter()
+        .find(|f| f.is_srgb())
+        .copied()
+        .unwrap_or(surface_caps.formats[0]);
 
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: self.size.width,
-            height: self.size.height,
-            present_mode: self.surface_caps.present_modes[0],
-            alpha_mode: self.surface_caps.alpha_modes[0],
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
+    let surface_config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: surface_format,
+        width: size.width,
+        height: size.height,
+        present_mode: surface_caps.present_modes[0],
+        alpha_mode: surface_caps.alpha_modes[0],
+        view_formats: vec![],
+        desired_maximum_frame_latency: 2,
+    };
 
-        self.surface.configure(&self.device, &surface_config);
-    }
+    surface.configure(&device, &surface_config);
+    surface_config
 }
