@@ -98,6 +98,10 @@ impl Renderer {
         &self.window
     }
 
+    pub fn get_size(&self) -> winit::dpi::PhysicalSize<u32> {
+        self.size
+    }
+
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Render the scene
         // Create texture view
@@ -135,5 +139,11 @@ impl Renderer {
         surface_texture.present();
 
         Ok(())
+    }
+
+    pub fn update(&mut self) {
+        // The update method is called once per frame before rendering
+        // Currently no state updates are needed, but this will be used
+        // for animations, physics simulations, etc.
     }
 }

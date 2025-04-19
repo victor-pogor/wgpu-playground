@@ -1,3 +1,4 @@
+use log;
 use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
@@ -42,11 +43,27 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                if let Err(e) = state.render() {
-                    eprintln!("Render error: {:?}", e);
-                }
-                // Emits a new redraw requested event.
+                // This tells winit that we want another frame after this one
                 state.get_window().request_redraw();
+
+                state.update();
+                match state.render() {
+                    Ok(_) => {}
+                    // Reconfigure the surface if it's lost or outdated
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        state.resize(state.get_size())
+                    }
+                    // The system is out of memory, we should probably quit
+                    Err(wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other) => {
+                        log::error!("OutOfMemory");
+                        event_loop.exit();
+                    }
+
+                    // This happens when the a frame takes too long to present
+                    Err(wgpu::SurfaceError::Timeout) => {
+                        log::warn!("Surface timeout")
+                    }
+                }
             }
             WindowEvent::Resized(size) => {
                 // Reconfigures the size of the surface. We do not re-render

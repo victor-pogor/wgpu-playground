@@ -11,3 +11,4 @@ winit = { version = "0.30.9", features = ["android-native-activity"] }
 bytemuck = { version = "1.14", features = ["derive"] }
 glam = "0.25"
 rand = "0.8"
+log = "0.4"
