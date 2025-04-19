@@ -1,0 +1,8 @@
+reorder_modules = true
+use_small_heuristics = "Default"
+max_width = 160
+
+ignore = [
+    "**/generated/**/*.rs",
+    "**/generated.rs"
+]

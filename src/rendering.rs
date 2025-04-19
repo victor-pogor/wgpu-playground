@@ -4,12 +4,15 @@ mod surface;
 
 use render_pipeline::RenderPipelines;
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use render_pass::create_background_render_pass;
 use surface::configure_surface;
 
-pub struct Renderer {
+use crate::shaders::VERTICES;
+
+pub(crate) struct Renderer {
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -17,10 +20,11 @@ pub struct Renderer {
     surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
     render_pipelines: RenderPipelines,
+    vertex_buffer: wgpu::Buffer,
 }
 
 impl Renderer {
-    pub async fn new(window: Arc<Window>) -> Self {
+    pub(crate) async fn new(window: Arc<Window>) -> Self {
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -77,6 +81,13 @@ impl Renderer {
         let surface_config = configure_surface(&device, &size, &surface, &surface_caps);
         let render_pipelines = RenderPipelines::new(&device, &surface_config);
 
+        let dev: wgpu::Device = device.clone();
+        let vertex_buffer = dev.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         let state = Renderer {
             window,
             device,
@@ -85,12 +96,13 @@ impl Renderer {
             surface,
             surface_config,
             render_pipelines,
+            vertex_buffer,
         };
 
         state
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.surface_config.width = new_size.width;
@@ -99,31 +111,24 @@ impl Renderer {
         }
     }
 
-    pub fn get_window(&self) -> &Window {
+    pub(crate) fn get_window(&self) -> &Window {
         &self.window
     }
 
-    pub fn get_size(&self) -> winit::dpi::PhysicalSize<u32> {
+    pub(crate) fn get_size(&self) -> winit::dpi::PhysicalSize<u32> {
         self.size
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub(crate) fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Render the scene
         // Create texture view
-        let surface_texture = self
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
+        let surface_texture = self.surface.get_current_texture().expect("failed to acquire next swapchain texture");
 
-        let texture_view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let texture_view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("WebGPU Command Encoder"),
-            });
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("WebGPU Command Encoder"),
+        });
 
         {
             let mut render_pass = create_background_render_pass(
@@ -138,7 +143,10 @@ impl Renderer {
             );
 
             render_pass.set_pipeline(&self.render_pipelines.render_triangle_pipeline);
-            render_pass.draw(0..3, 0..1);
+
+            let num_vertices = VERTICES.len() as u32;
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..num_vertices, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
@@ -149,7 +157,7 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn update(&mut self) {
+    pub(crate) fn update(&mut self) {
         // The update method is called once per frame before rendering
         // Currently no state updates are needed, but this will be used
         // for animations, physics simulations, etc.

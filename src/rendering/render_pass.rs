@@ -1,7 +1,7 @@
 use wgpu;
 
 /// Creates a render pass that clears the background to a specific color
-pub fn create_background_render_pass<'a>(
+pub(super) fn create_background_render_pass<'a>(
     encoder: &'a mut wgpu::CommandEncoder,
     texture_view: &'a wgpu::TextureView,
     color: wgpu::Color,

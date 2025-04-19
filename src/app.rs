@@ -6,7 +6,7 @@ use winit::{application::ApplicationHandler, event::WindowEvent, window::Window}
 use crate::rendering::Renderer;
 
 #[derive(Default)]
-pub struct App {
+pub(crate) struct App {
     state: Option<Renderer>,
 }
 
@@ -31,12 +31,7 @@ impl ApplicationHandler for App {
         window.request_redraw();
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
+    fn window_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, _window_id: winit::window::WindowId, event: winit::event::WindowEvent) {
         let state = self.state.as_mut().unwrap();
         match event {
             WindowEvent::CloseRequested => {
@@ -51,9 +46,7 @@ impl ApplicationHandler for App {
                 match state.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.get_size())
-                    }
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state.resize(state.get_size()),
                     // The system is out of memory, we should probably quit
                     Err(wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other) => {
                         log::error!("OutOfMemory");
@@ -78,9 +71,7 @@ impl ApplicationHandler for App {
 
 fn compute_screen_size(event_loop: &winit::event_loop::ActiveEventLoop) -> (u32, u32) {
     // Get the primary monitor
-    let monitor = event_loop
-        .primary_monitor()
-        .expect("No primary monitor found");
+    let monitor = event_loop.primary_monitor().expect("No primary monitor found");
 
     // Get the size of the monitor
     let size = monitor.size();
