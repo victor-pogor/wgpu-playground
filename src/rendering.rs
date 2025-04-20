@@ -209,9 +209,31 @@ impl Renderer {
     }
 
     pub(crate) fn update(&mut self) {
-        // The update method is called once per frame before rendering
-        // Currently no state updates are needed, but this will be used
-        // for animations, physics simulations, etc.
+        // Calculate time since last update
+        let now = Instant::now();
+        let dt = now.duration_since(self.last_update).as_secs_f32();
+        self.last_update = now;
+
+        // Limit delta time to prevent large jumps in the simulation
+        // This is especially important on the first frame when dt can be very large
+        let clamped_dt = dt.min(0.016); // Cap at ~60 FPS time step (16ms)
+
+        // Update delta time in simulation state
+        self.simulation_state.delta_time = clamped_dt;
+
+        // If simulation has changed, update the view matrix and buffers
+        if self.simulation_changed {
+            // Get new bodies from the simulation manager
+            let bodies = self.simulation_manager.get_bodies();
+
+            // Update the current buffer with the new bodies
+            self.simulation_resources.update_bodies(&self.queue, &bodies);
+
+            self.simulation_changed = false;
+        }
+
+        // Update simulation state buffer
+        self.simulation_resources.update_simulation_state(&self.queue, &self.simulation_state);
     }
 
     pub(crate) fn switch_simulation(&mut self, index: usize) {

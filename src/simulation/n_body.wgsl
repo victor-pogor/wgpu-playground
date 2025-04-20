@@ -1,6 +1,8 @@
 // Constants for N-body simulation
 const NUM_BODIES: u32 = 1024;
 const G: f32 = 6.67430e-11;  // Gravitational constant
+const MAX_FORCE_MAG: f32 = 1.0e10; // Maximum force magnitude
+const MIN_DISTANCE: f32 = 0.0000001; // Minimum distance to avoid singularities
 const SOFTENING: f32 = 0.01; // Softening parameter to avoid numerical instability
 const DT: f32 = 0.001;       // Time step for integration
 
@@ -66,27 +68,35 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let other_pos = other.position.xyz;
         let other_mass = other.position.w; // Other mass from position.w
         
-        // Calculate direction and distance
+         // Calculate direction and distance
         let dir = other_pos - pos;
-        let dist_squared = dot(dir, dir) + SOFTENING;
+        
+        // Apply softening and ensure minimum distance
+        let raw_dist_squared = dot(dir, dir);
+        let dist_squared = max(raw_dist_squared + SOFTENING, MIN_DISTANCE * MIN_DISTANCE);
         let dist = sqrt(dist_squared);
         
-        // Newton's law of gravitation: F = G * m1 * m2 / r^2
-        // a = F/m = G * m2 / r^2
-        let force_mag = G * other_mass / dist_squared;
+        // Newton's law of gravitation with clamped maximum force
+        let force_mag = min(G * other_mass / dist_squared, MAX_FORCE_MAG);
         
-        // DEBUG: Track maximum force magnitude
+        // DEBUG tracking
         if (force_mag > max_force) {
             max_force = force_mag;
         }
-        
-        // DEBUG: Track minimum distance
         if (dist < min_distance) {
             min_distance = dist;
         }
         
-        // Accumulate acceleration
-        acceleration = acceleration + force_mag * normalize(dir);
+        // Apply acceleration with safe direction handling
+        if (raw_dist_squared > MIN_DISTANCE) {
+            // Safe to normalize when distance is significant
+            acceleration = acceleration + force_mag * normalize(dir);
+        } else {
+            // Apply slight perturbation for extremely close particles
+            // Use MIN_DISTANCE to scale the perturbation vector
+            let perturbation = vec3<f32>(MIN_DISTANCE, MIN_DISTANCE, 0.0);
+            acceleration = acceleration + force_mag * normalize(perturbation);
+        }
     }
     
     // Write debug data - only from one thread to avoid race conditions
