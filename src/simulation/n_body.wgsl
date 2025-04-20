@@ -2,7 +2,7 @@
 const NUM_BODIES: u32 = 1024;
 const G: f32 = 6.67430e-11;  // Gravitational constant
 const MAX_FORCE_MAG: f32 = 1.0e10; // Maximum force magnitude
-const MIN_DISTANCE: f32 = 0.0000001; // Minimum distance to avoid singularities
+const MIN_DISTANCE_SQUARED: f32 = 0.0001; // Minimum distance to avoid singularities
 const SOFTENING: f32 = 0.01; // Softening parameter to avoid numerical instability
 const DT: f32 = 0.001;       // Time step for integration
 
@@ -62,7 +62,10 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     // Compute interactions with all other bodies
     for (var i: u32 = 0u; i < NUM_BODIES; i = i + 1u) {
-        if (i == index) { continue; } // Skip self-interaction
+        // Skip self-interaction
+        if (i == index) { 
+            continue; 
+        }
         
         let other = bodies_in[i];
         let other_pos = other.position.xyz;
@@ -70,32 +73,23 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
         
          // Calculate direction and distance
         let dir = other_pos - pos;
-        
-        // Apply softening and ensure minimum distance
         let raw_dist_squared = dot(dir, dir);
-        let dist_squared = max(raw_dist_squared + SOFTENING, MIN_DISTANCE * MIN_DISTANCE);
+        
+        // Only process if distance is reasonable (avoids garbage data)
+        if (raw_dist_squared <= MIN_DISTANCE_SQUARED) {
+            continue; // Skip if distance is zero or negative
+        }
+
+        // Calculate distance and force
+        let dist_squared = max(raw_dist_squared + SOFTENING, MIN_DISTANCE_SQUARED);
         let dist = sqrt(dist_squared);
         
         // Newton's law of gravitation with clamped maximum force
         let force_mag = min(G * other_mass / dist_squared, MAX_FORCE_MAG);
         
-        // DEBUG tracking
-        if (force_mag > max_force) {
-            max_force = force_mag;
-        }
-        if (dist < min_distance) {
-            min_distance = dist;
-        }
-        
-        // Apply acceleration with safe direction handling
-        if (raw_dist_squared > MIN_DISTANCE) {
-            // Safe to normalize when distance is significant
+        // Only apply force if significant
+        if (force_mag > 0.000001) {
             acceleration = acceleration + force_mag * normalize(dir);
-        } else {
-            // Apply slight perturbation for extremely close particles
-            // Use MIN_DISTANCE to scale the perturbation vector
-            let perturbation = vec3<f32>(MIN_DISTANCE, MIN_DISTANCE, 0.0);
-            acceleration = acceleration + force_mag * normalize(perturbation);
         }
     }
     
@@ -107,7 +101,7 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     
     // If this is a specific particle we're interested in, log its data
-    if (index == 10u) { // Track particle #10 as an example
+    if (index == 0u) { // Track particle #0 as an example
         debug_buffer.particle_info = vec4<f32>(pos, length(acceleration));
     }
     
