@@ -50,6 +50,17 @@ impl RenderConfig {
                     },
                     count: None,
                 },
+                // debug_buffer
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -121,6 +132,7 @@ impl RenderConfig {
         device: &wgpu::Device,
         body_buffers: &[wgpu::Buffer; 2],
         simulation_state_buffer: &wgpu::Buffer,
+        debug_buffer: &wgpu::Buffer,
     ) -> [wgpu::BindGroup; 2] {
         [
             device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -139,6 +151,10 @@ impl RenderConfig {
                         binding: 2,
                         resource: simulation_state_buffer.as_entire_binding(),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: debug_buffer.as_entire_binding(),
+                    },
                 ],
             }),
             device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -156,6 +172,10 @@ impl RenderConfig {
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: simulation_state_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: debug_buffer.as_entire_binding(),
                     },
                 ],
             }),

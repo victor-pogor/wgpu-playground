@@ -238,4 +238,20 @@ impl Renderer {
     pub(crate) fn toggle_info(&mut self) {
         self.show_info = true;
     }
+
+    pub(crate) fn debug_compute_shader(&mut self) {
+        // Read the debug data from the debug buffer
+        let debug_data = self.simulation_resources.read_debug_data(&self.device, &self.queue);
+
+        // Print the debug information
+        println!("===== Compute Shader Debug Data =====");
+        println!("Iterations: {}", debug_data.iterations);
+        println!("Max force: {}", debug_data.max_force);
+        println!("Min distance: {}", debug_data.min_distance);
+        println!(
+            "Tracked particle position: ({:.2}, {:.2}, {:.2}), Acceleration: {:.2}",
+            debug_data.particle_info[0], debug_data.particle_info[1], debug_data.particle_info[2], debug_data.particle_info[3]
+        );
+        println!("===================================");
+    }
 }

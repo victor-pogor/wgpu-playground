@@ -85,6 +85,7 @@ impl ApplicationHandler for App {
                         KeyCode::ArrowRight => state.next_simulation(),
                         KeyCode::ArrowLeft => state.previous_simulation(),
                         KeyCode::KeyI => state.toggle_info(),
+                        KeyCode::KeyD => state.debug_compute_shader(),
                         _ => (),
                     }
                 }

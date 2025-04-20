@@ -17,10 +17,20 @@ struct SimulationState {
     deltaTime: f32,
 }
 
+// Debug buffer structure - can store any values you want to inspect
+struct DebugData {
+    // Example debug values
+    iterations: u32,
+    max_force: f32,
+    min_distance: f32,
+    particle_info: vec4<f32>, // Can store position or other per-particle info
+}
+
 // Body data in, body data out
 @group(0) @binding(0) var<storage, read> bodies_in: array<Body>;
 @group(0) @binding(1) var<storage, read_write> bodies_out: array<Body>;
 @group(0) @binding(2) var<uniform> sim: SimulationState;
+@group(0) @binding(3) var<storage, read_write> debug_buffer: DebugData;
 
 // Compute shader for n-body simulation using Verlet integration
 @compute @workgroup_size(64)
@@ -44,6 +54,10 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Calculate acceleration at current position
     var acceleration = vec3<f32>(0.0, 0.0, 0.0);
     
+    // DEBUG variables
+    var max_force: f32 = 0.0;
+    var min_distance: f32 = 1000000.0; // Start with a large value
+    
     // Compute interactions with all other bodies
     for (var i: u32 = 0u; i < NUM_BODIES; i = i + 1u) {
         if (i == index) { continue; } // Skip self-interaction
@@ -61,8 +75,30 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // a = F/m = G * m2 / r^2
         let force_mag = G * other_mass / dist_squared;
         
+        // DEBUG: Track maximum force magnitude
+        if (force_mag > max_force) {
+            max_force = force_mag;
+        }
+        
+        // DEBUG: Track minimum distance
+        if (dist < min_distance) {
+            min_distance = dist;
+        }
+        
         // Accumulate acceleration
         acceleration = acceleration + force_mag * normalize(dir);
+    }
+    
+    // Write debug data - only from one thread to avoid race conditions
+    if (index == 0u) {
+        debug_buffer.iterations += 1u;
+        debug_buffer.max_force = max_force;
+        debug_buffer.min_distance = min_distance;
+    }
+    
+    // If this is a specific particle we're interested in, log its data
+    if (index == 10u) { // Track particle #10 as an example
+        debug_buffer.particle_info = vec4<f32>(pos, length(acceleration));
     }
     
     // Verlet integration

@@ -20,3 +20,14 @@ pub(crate) struct SimulationState {
     pub delta_time: f32,
     pub _padding: [f32; 3], // Padding to align with mat4
 }
+
+// Debug buffer structure to match the shader's DebugData
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+pub(crate) struct DebugData {
+    pub iterations: u32,
+    pub max_force: f32,
+    pub min_distance: f32,
+    pub particle_info: [f32; 4],
+    pub _padding: u32,
+}
