@@ -94,14 +94,10 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     
     // Write debug data - only from one thread to avoid race conditions
-    if (index == 0u) {
+    if (index == 1u) {
         debug_buffer.iterations += 1u;
         debug_buffer.max_force = max_force;
         debug_buffer.min_distance = min_distance;
-    }
-    
-    // If this is a specific particle we're interested in, log its data
-    if (index == 0u) { // Track particle #0 as an example
         debug_buffer.particle_info = vec4<f32>(pos, length(acceleration));
     }
     
@@ -159,12 +155,12 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32,
     // Get the visual radius from body data
     let visual_radius = body.velocity.w;
     
-    // Simplified positioning - just use world position scaled to clip space
-    // This is a temporary solution until view/projection matrices are re-added
-    let clip_pos = vec4<f32>(world_pos * 0.01, 1.0); // Scale down positions to fit in clip space
+    let SCALE_FACTOR = 0.01; // Scale factor to fit in clip space
+    let RADIUS_SCALE = 1.0 / 2.0e8; // Scale to reduce the size of the particles
+    let clip_pos = vec4<f32>(world_pos * SCALE_FACTOR, 1.0); // Scale down positions to fit in clip space
     
     // Apply a fixed scale factor
-    let base_size = visual_radius * 0.05; // Adjust scale for direct clip space
+    let base_size = visual_radius * RADIUS_SCALE * 0.05; // Adjust scale for direct clip space
     
     // Apply the scale to the vertex position in clip space
     var scaled_pos = clip_pos;

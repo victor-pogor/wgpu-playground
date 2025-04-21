@@ -68,22 +68,22 @@ impl SimulationResources {
         }
     }
 
-    pub fn update_bodies(&mut self, queue: &wgpu::Queue, bodies: &[crate::simulation::types::Body]) {
+    pub(crate) fn update_bodies(&mut self, queue: &wgpu::Queue, bodies: &[crate::simulation::types::Body]) {
         // Update the current buffer with the new bodies
         queue.write_buffer(&self.body_buffers[self.current_buffer], 0, bytemuck::cast_slice(bodies));
     }
 
-    pub fn update_simulation_state(&self, queue: &wgpu::Queue, simulation_state: &SimulationState) {
+    pub(crate) fn update_simulation_state(&self, queue: &wgpu::Queue, simulation_state: &SimulationState) {
         // Update simulation state buffer
         queue.write_buffer(&self.simulation_state_buffer, 0, bytemuck::cast_slice(&[*simulation_state]));
     }
 
-    pub fn swap_buffers(&mut self) {
+    pub(crate) fn swap_buffers(&mut self) {
         // Swap buffers for ping-pong computation
         self.current_buffer = 1 - self.current_buffer;
     }
 
-    pub fn read_debug_data(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> DebugData {
+    pub(crate) fn read_debug_data(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> DebugData {
         // Create a staging buffer to read back debug data
         let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Debug Staging Buffer"),
