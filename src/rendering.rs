@@ -268,8 +268,6 @@ impl Renderer {
         // Print the debug information
         println!("===== Compute Shader Debug Data =====");
         println!("Iterations: {}", debug_data.iterations);
-        println!("Max force: {}", debug_data.max_force);
-        println!("Min distance: {}", debug_data.min_distance);
         println!(
             "Tracked particle position: ({:.2}, {:.2}, {:.2}), Acceleration: {:.2}",
             debug_data.particle_info[0], debug_data.particle_info[1], debug_data.particle_info[2], debug_data.particle_info[3]

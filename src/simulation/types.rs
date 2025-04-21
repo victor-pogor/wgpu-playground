@@ -17,17 +17,15 @@ pub(crate) struct Body {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub(crate) struct SimulationState {
-    pub delta_time: f32,
-    pub _padding: [f32; 3], // Padding to align with mat4
+    pub delta_time: f32,    // 4 bytes
+    pub _padding: [f32; 3], // 12 bytes of padding to align with mat4, see https://stackoverflow.com/a/75525055
 }
 
 // Debug buffer structure to match the shader's DebugData
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub(crate) struct DebugData {
-    pub iterations: u32,
-    pub max_force: f32,
-    pub min_distance: f32,
-    pub particle_info: [f32; 4],
-    pub _padding: u32,
+    pub iterations: u32,         // 4 bytes
+    pub _padding: [u32; 3],      // 12 bytes of padding to align with mat4, see https://stackoverflow.com/a/75525055
+    pub particle_info: [f32; 4], // 16 bytes
 }

@@ -21,10 +21,7 @@ struct SimulationState {
 
 // Debug buffer structure - can store any values you want to inspect
 struct DebugData {
-    // Example debug values
     iterations: u32,
-    max_force: f32,
-    min_distance: f32,
     particle_info: vec4<f32>, // Can store position or other per-particle info
 }
 
@@ -55,10 +52,6 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     // Calculate acceleration at current position
     var acceleration = vec3<f32>(0.0, 0.0, 0.0);
-    
-    // DEBUG variables
-    var max_force: f32 = 0.0;
-    var min_distance: f32 = 1000000.0; // Start with a large value
     
     // Compute interactions with all other bodies
     for (var i: u32 = 0u; i < NUM_BODIES; i = i + 1u) {
@@ -96,8 +89,6 @@ fn compute_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Write debug data - only from one thread to avoid race conditions
     if (index == 1u) {
         debug_buffer.iterations += 1u;
-        debug_buffer.max_force = max_force;
-        debug_buffer.min_distance = min_distance;
         debug_buffer.particle_info = vec4<f32>(pos, length(acceleration));
     }
     
@@ -157,7 +148,8 @@ fn vertex_main(@builtin(instance_index) instance_idx: u32,
     
     let SCALE_FACTOR = 0.01; // Scale factor to fit in clip space
     let RADIUS_SCALE = 1.0 / 2.0e8; // Scale to reduce the size of the particles
-    let clip_pos = vec4<f32>(world_pos * SCALE_FACTOR, 1.0); // Scale down positions to fit in clip space
+    let DISTANCE_SCALE = 1.0 / 1.0e14; // Scale to reduce the distance of the particles
+    let clip_pos = vec4<f32>(world_pos * DISTANCE_SCALE * SCALE_FACTOR, 1.0);
     
     // Apply a fixed scale factor
     let base_size = visual_radius * RADIUS_SCALE * 0.05; // Adjust scale for direct clip space

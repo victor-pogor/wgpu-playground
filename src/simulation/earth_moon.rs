@@ -62,9 +62,9 @@ impl EarthMoonSimulation {
         let earth_mass = 5.9722e24; // kg
         let earth_radius = 6.371e6; // meters (for visual scale)
 
-        // Calculate position in 2D (X-Z plane)
+        // Calculate position in 2D (X-Y plane)
         let earth_x = earth_distance * orbit_angle.cos();
-        let earth_z = earth_distance * orbit_angle.sin();
+        let earth_y = earth_distance * orbit_angle.sin();
 
         // Calculate orbital velocity (circular orbit approximation)
         let sun_mass = 1.98847e30; // kg
@@ -73,16 +73,16 @@ impl EarthMoonSimulation {
 
         // Velocity vector perpendicular to position vector
         let earth_vx = -earth_speed * orbit_angle.sin();
-        let earth_vz = earth_speed * orbit_angle.cos();
+        let earth_vy = earth_speed * orbit_angle.cos();
 
         let earth_body = Body {
-            position: [earth_x, 0.0, earth_z, earth_mass],
-            velocity: [earth_vx, 0.0, earth_vz, earth_radius],
+            position: [earth_x, earth_y, 0.0, earth_mass],
+            velocity: [earth_vx, earth_vy, 0.0, earth_radius],
             color: [0.2, 0.4, 0.8, 1.0], // Blue
         };
 
         // Return the body and its position/velocity for use with the moon
-        (earth_body, [earth_x, earth_z], [earth_vx, earth_vz])
+        (earth_body, [earth_x, earth_y], [earth_vx, earth_vy])
     }
 
     // Create empty placeholder bodies to fill the required count

@@ -44,10 +44,8 @@ impl SimulationResources {
         // Create debug buffer with initial zero values
         let initial_debug_data = DebugData {
             iterations: 0,
-            max_force: 0.0,
-            min_distance: 0.0,
             particle_info: [0.0; 4],
-            _padding: 0,
+            _padding: [0; 3],
         };
 
         let debug_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -131,10 +129,8 @@ impl SimulationResources {
             // Return a default value if mapping fails
             DebugData {
                 iterations: 0,
-                max_force: 0.0,
-                min_distance: 0.0,
                 particle_info: [0.0; 4],
-                _padding: 0,
+                _padding: [0; 3],
             }
         }
     }
